@@ -68,9 +68,11 @@ Similar to our first approach, we took the binomial prior since we wanted to det
 Here is our posterior distribution for the particular user (User_ID : 387418) for both genres:
 
 For ‘Drama’ :
+
 <img width="712" alt="drama" src="https://user-images.githubusercontent.com/89557209/172509959-77093cc9-4d3c-4a08-b8f9-b58047997db1.png">
 
 For 'Crime, Drama, Thrille':
+
 <img width="675" alt="cdt" src="https://user-images.githubusercontent.com/89557209/172509989-f1b70426-d8d1-443e-8c80-9b97847f904d.png">
 
 Again, we see that the probability of the given user watching ‘Drama’ is around 11%. The probability of watching ‘Crime, Drama, Thriller’ is around 7%. This is particularly an interesting conclusion. Regardless of the way we measure preference–either quantitatively by the percentage of a particular genre from a user’s watch history or by user’s rating history–the distribution of posterior for the probability of watching ‘Drama’ stays around 11%.
