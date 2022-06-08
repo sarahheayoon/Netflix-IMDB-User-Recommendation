@@ -1,0 +1,250 @@
+---
+title: "Move Preference Analysis (Netflix + IMDB)"
+author: "Sarah, Julia, Moe, Patrick"
+date: "4/13/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Importing Dataset
+
+```{r}
+#-------------------Importing Datasets--------------------
+library(tidyverse)
+Netflix_Movie <- read.csv("/Users/heayoon/Desktop/05 - Second Sem/Bayesian Statistics/Final Project/Netflix/Netflix_Dataset_Movie.csv")
+Netflix_Rating <- read.csv("/Users/heayoon/Desktop/05 - Second Sem/Bayesian Statistics/Final Project/Netflix/Netflix_Dataset_Rating.csv")
+IMDB_Rating <- read.csv("/Users/heayoon/Desktop/05 - Second Sem/Bayesian Statistics/Final Project/IMDB/imdb_top_1000.csv")
+
+#Combining Netflix Datasets
+Netflix_tot <- Netflix_Rating %>%
+  left_join(Netflix_Movie, by = "Movie_ID")
+
+#Attaching Genre to Netflix Dataset
+Movies_tot <- Netflix_tot %>%
+  inner_join(IMDB_Rating, by = "Name")
+
+Movies_tot_test <- Movies_tot %>% filter(User_ID != '387418')
+
+#write.csv(Netflix_tot, "/Users/heayoon/Desktop\\Netflix_tot.csv")
+#write.csv(Movies_tot, "/Users/heayoon/Desktop\\Movies_tot.csv")
+```
+
+```{r}
+#-------------------Setting Priors--------------------
+#--------------------Sorting by Genre------------------------
+by_genre <- select(Movies_tot_test, Genre) %>%
+  drop_na(Genre) %>%
+  group_by(Genre) %>%
+  summarise(n_genre = n()) %>%
+  arrange(desc(n_genre))
+
+by_genre <- mutate(by_genre, percent = n_genre/sum(n_genre))
+by_genre <- mutate(by_genre, sd = sd(percent))
+
+# visualizing genre by the pie chart -> Notice 'Drama' Genre is most rated
+library(ggplot2)
+
+ggplot(by_genre, aes(x = "", y = percent, fill = Genre)) +
+  geom_bar(stat="identity", width=1, color="white") +
+  coord_polar("y", start=0) +
+  theme_void() # remove background, grid, numeric labels
+
+# Number of movies from the genre "Drama" for each user except moe
+by_users_drama_tot <- Movies_tot_test %>% group_by(User_ID) %>% summarise(total_movies_rated = n())
+by_users_drama <- Movies_tot_test %>% filter(Genre == 'Drama') %>% group_by(User_ID) %>% summarise(n_drama = n())
+by_user_drama_df <- by_users_drama_tot %>%
+    left_join(by_users_drama, by = "User_ID")
+```
+
+```{r}
+# User_ID: 387418
+df_387418 <- filter(Movies_tot, User_ID == '387418')
+
+by_genre_387418 <- select(df_387418, Genre) %>%
+  drop_na(Genre) %>%
+  group_by(Genre) %>%
+  summarise(n_genre = n()) %>%
+  arrange(desc(n_genre))
+
+sum(by_genre_387418$n_genre) #total number of movies watched (n=91)
+```
+
+
+```{r}
+#----------------Bayesian Prediction--------------------------
+# Given how often Netflix viewers in general choose to watch Drama over other-genre films, What's the likelihood that in Moe's next Netflix session she will watch a movie from this particular genre - Drama - over other genre
+library(Bolstad)
+#Uniform Prior
+result0 <- binobp(10, 91, 1, 1) #post mean: 0.1182796 post sd: 0.0333086 a: 11.00 b: 82.00
+quantile(result0, probs = c(0.025, 0.975))
+
+#Estimating Beta Parameters (Calculation)
+estBetaParams <- function(mu, var) {
+  alpha <- ((1 - mu) / var - 1 / mu) * mu ^ 2
+  beta <- alpha * (1 / mu - 1)
+  return(params = list(alpha = alpha, beta = beta))
+}
+# Given mean 0.1247721354 sd 0.02189321
+estBetaParams(0.1247721354,0.02189321^2)
+result2 <- binobp(10, 91, 28.30, 198.53) #post mean 0.1205134 sd: 0.0182311 a: 38.30 b: 279.54
+quantile(result2, probs = c(0.025, 0.975))
+
+# Percentage of "Drama" in the viewership of each user
+by_user_drama_df <- mutate(by_user_drama_df, perc_drama = n_drama/total_movies_rated)
+hist(by_user_drama_df$perc_drama, main = "Percentage of Genre 'Drama' in Users' Watch History", xlab="percentage")
+
+# Beta prior that looks most similar to our histogram of viewership
+result3 <- binobp(10, 91, 2.5, 10) #reflects our beliefs: post mean 0.1207729 post sd: 0.031877 a:12.50 b: 91.00
+quantile(result3, probs = c(0.025, 0.975))
+```
+
+```{r}
+# cool three plots
+x <- seq(from = 0, to = 0.4, by=0.001)
+plot(x, dbeta(x, 38.30, 279.54), ylab="density", type="l", col="red")
+lines(x, dbeta(x, 11,82), ylab="density", type="l", col="green") #uniform
+lines(x, dbeta(x, 12.50, 91.00), ylab="density", type="l", col="blue") 
+```
+
+```{r}
+#-------------------by Rating (user) ---------------------------
+user_info <- Movies_tot%>% select(User_ID, Genre, Rating)
+  
+ratings_by_user <- user_info %>% group_by(User_ID, Genre) %>% 
+       summarise(rating_genre =sum(Rating)) %>% 
+       spread(Genre, rating_genre) %>% 
+       ungroup()
+
+write.csv(ratings_by_user, "/Users/heayoon/Desktop\\ratings_by_user.csv")
+
+library(Hmisc)
+hist.data.frame(ratings_by_user)
+#We see that Drama and CDT has most significant rating history, so we will only look at those two genre
+
+hist(ratings_by_user$Drama)
+hist(ratings_by_user$`Crime, Drama, Thriller`)
+
+# Initially thought that the ratings might follow a discrete normal distribution
+qqnorm(ratings_by_user$Drama)
+qqnorm(ratings_by_user$`Crime, Drama, Thriller`)
+#heavy-tailed, but the middle part is pretty straight meaning there is a spike in identical values which corresponds to our observations.
+```
+
+```{r}
+# Scaling the ratings in terms of total rating per user:given a user's total rating score how much of the rating was counted towards that particular genre (Drama / CDT). In other words, we are trying to use the rating portions to predict a person's preference for that particular genre
+ratings_by_user0 <- ratings_by_user%>% mutate_if(is.integer, ~replace(., is.na(.), 0))
+ratings_by_user0$n_total <- rowSums(ratings_by_user0[,2:61])
+
+ratings_by_user0 <- ratings_by_user0 %>% select(User_ID, `Crime, Drama, Thriller`, `Drama`, n_total)%>%
+  mutate(percent_rating_CDT = `Crime, Drama, Thriller`/n_total) %>%
+  mutate(percent_rating_Drama = `Drama`/n_total)
+
+summary(ratings_by_user0)
+#hist.data.frame(ratings_by_user0)
+hist(ratings_by_user0$percent_rating_CDT)
+hist(ratings_by_user0$percent_rating_Drama)
+
+# calculating mean
+mean(ratings_by_user0$percent_rating_CDT) #0.104737
+mean(ratings_by_user0$percent_rating_Drama) #0.1204008
+
+# calculating std. dev
+sd(ratings_by_user0$percent_rating_CDT) #0.06354885
+sd(ratings_by_user0$percent_rating_Drama) #0.08674713
+
+estBetaParams(0.1204008,0.08674713^2)
+#------------------Prediction--------------------------
+#Estimating Beta Parameters for CDT
+estBetaParams(0.104737,0.06354885^2)
+result4 <- binobp(5, 91, 2.327106, 19.89146) #0.12 mean 0.27 sd calucated: post mean 0.1205134 sd: 0.0182311 a: 38.31 b: 279.56
+quantile(result4, probs = c(0.025, 0.975))
+
+#Estimating Beta Parameters for Drama
+estBetaParams(0.1204008,0.08674713^2)
+result5 <- binobp(10, 91, 1.574067, 11.49949) #reflects our beliefs: post mean 0.1207729 post sd: 0.031877 a:12.50 b: 91.00
+quantile(result5, probs = c(0.025, 0.975))
+```
+
+
+```{r setup, include=FALSE}
+#---------------Bayes Lin Reg Model--------------------------------
+library(tidyverse)
+library(Bolstad)
+library(readr)
+imdb <- read_csv("imdb_top_1000.csv")
+```
+
+### Attempt at MLR
+```{r}
+imdb$Genre <- as.factor(imdb$Genre)
+imdb_numbers <- subset(imdb, select=-c(Name, Released_Year, Gross))
+imdb_numbers <- imdb_numbers[, c(5, 2, 3, 4, 1)]
+pairs(imdb_numbers, upper.panel = panel.smooth)
+
+b0 = rep(0, 4)
+V0 = 1e4 * diag(rep(1, 4))
+fit = bayes.lm(IMDB_Rating ~ Meta_score + Runtime + No_of_Votes, data = imdb,
+               prior = list(b0 = b0, V0 = V0))
+summary(fit)
+```
+
+### Visualize Data
+```{r}
+par(mfrow=c(2,2))
+plot(num_counts ~ mean_score, type = 'p', NFRate, main = 'Netflix # Ratings v. Rating Scores')
+abline(lm(NFRate$num_counts ~ NFRate$mean_score), col='red')
+plot(No_of_Votes ~ RatingScaled, type = 'p', imdb, main = 'IMDB # Ratings v. Rating Scores')
+abline(lm(imdb$No_of_Votes ~ imdb$RatingScaled), col='red')
+```
+
+### Viewing Netflix Data for SLM
+```{r}
+NFRate <- read.csv("Ratings_df.csv")
+NFRate <- NFRate[, c(2, 4, 5)]
+NFRate
+hist(NFRate$mean_score)
+hist(NFRate$num_counts)
+```
+
+### First update on flat prior using NF data
+```{r}
+# lmodel = lm(NFRate$num_counts ~ NFRate$mean_score) 
+# res = lmodel$residuals 
+# ssr = sum(res**2)
+# 
+# estimated_var = ssr/(1342-2) #ssr/(n-2) 
+# estimated_var
+
+post1 = bayes.lin.reg(NFRate$num_counts, NFRate$mean_score, "f","f")
+
+# Credible Intervals for Slope
+7505 + 1.96*1135
+7505 - 1.96*1135
+```
+
+### Clean IMDB data, scale ratings
+```{r}
+imdb$RatingScaled <- imdb$IMDB_Rating/2
+head(imdb)
+```
+
+### Second update on prior using IMDB data
+```{r}
+# lmodel2 = lm(imdb$No_of_Votes ~ imdb$IMDB_Rating) 
+# res2 = lmodel2$residuals 
+# ssr2 = sum(res2**2)
+# estimated_var2 = ssr2/(1342-2) #ssr/(n-2) 
+# estimated_var2
+
+post2 = bayes.lin.reg(imdb$No_of_Votes,imdb$RatingScaled,"n","n", mb0 = 7505, sb0 = 1135, ma0 = 12920, sa0 = 480.19)
+
+# Credible Intervals for Slope
+7857 + 1.96*1134.8
+7857 - 1.96*1134.8
+```
+
