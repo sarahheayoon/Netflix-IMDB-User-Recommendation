@@ -101,10 +101,10 @@ We land on a final estimate of the beta coefficient as 7857 additional raters fo
 
 It should be recognized, however, that does in no way grant certainty about a one-way causal relation by which higher ratings beget larger viewership. Because we use the “number of voters/raters” as a proxy for a measure of viewership, it is feasible that in fact a positive feedback loop is at play; the better a film is rated, the more people will view the film and the more people will rate the film well, further raising the film’s rating. 
 
-Conclusions: 
+## Conclusions: 
 We conclude that there is a 12% chance that a particular user will watch a movie in ‘Drama’ as opposed to other movies in other genres. Further, we estimate that for every additional point on a 1-5 scale for a film’s aggregate online rating, the film will receive approximately 7,857 additional raters.
 
-Discussion: 
+## Discussion: 
 Our results allow us to determine what movie should be shown to a particular user based on the genres the user has watched previously, as well as their ratings of movies. 
 
 Because our data was taken from several years ago, and media consumption has drastically and rapidly changed since then, it would be of interest to conduct further analyses with more recent data. For instance, movie watchers’ preferences may have evolved so that drama is not as prevalent as a genre nowadays, or has become even more relevant today. Particularly, with the COVID-19 pandemic, watchtime has skyrocketed, and new patterns of viewership may have emerged.
